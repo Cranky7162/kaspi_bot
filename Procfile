@@ -1,0 +1,1 @@
+web: python kaspi_bot.py
