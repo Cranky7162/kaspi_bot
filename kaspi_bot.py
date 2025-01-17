@@ -2,7 +2,7 @@ import logging
 import requests
 import time
 from telegram import Bot
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler
 import asyncio
 
 # Токен твоего Telegram-бота
@@ -22,9 +22,9 @@ bot = Bot(token=TOKEN)
 logging.basicConfig(level=logging.INFO)
 
 # Функция для отправки уведомлений в Telegram
-def send_telegram_notification(message):
+async def send_telegram_notification(message):
     try:
-        bot.send_message(chat_id=CHAT_ID, text=message)
+        await bot.send_message(chat_id=CHAT_ID, text=message)
     except Exception as e:
         logging.error(f"Ошибка при отправке сообщения в Telegram: {e}")
 
@@ -36,17 +36,16 @@ def get_orders_from_kaspi():
     }
 
     # Выполняем запрос к API Kaspi
-    response = requests.get(KASPI_ORDERS_URL, headers=headers)
-
-    if response.status_code == 200:
-        # Если запрос успешен, возвращаем данные о заказах
+    try:
+        response = requests.get(KASPI_ORDERS_URL, headers=headers)
+        response.raise_for_status()  # Будет исключение при ошибке статуса
         return response.json()
-    else:
-        logging.error(f"Ошибка при запросе к API Kaspi: {response.status_code}")
+    except requests.RequestException as e:
+        logging.error(f"Ошибка при запросе к API Kaspi: {e}")
         return None
 
 # Функция для проверки новых заказов и отправки уведомлений
-def check_new_orders():
+async def check_new_orders():
     orders = get_orders_from_kaspi()
     
     if orders:
@@ -68,7 +67,7 @@ def check_new_orders():
             message = f"Новый заказ:\nID: {order_id}\nКлиент: {customer_name}\nСумма: {total_amount}\nТовары:{item_details}"
 
             # Отправляем уведомление в Telegram
-            send_telegram_notification(message)
+            await send_telegram_notification(message)
 
 # Обработчик команды /start
 async def start(update, context):
@@ -87,11 +86,9 @@ async def main():
 
     # Запускаем проверку заказов с задержкой
     while True:
-        check_new_orders()  # Проверяем новые заказы
-        time.sleep(300)  # Ожидаем 5 минут (300 секунд) перед следующим запросом
+        await check_new_orders()  # Проверяем новые заказы
+        await asyncio.sleep(300)  # Ожидаем 5 минут (300 секунд) перед следующим запросом
 
 # Запуск бота, если скрипт выполняется напрямую
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.create_task(main())  # Создаем задачу для main
-    loop.run_forever()  # Запускаем бесконечный цикл событий
+    asyncio.run(main())  # Запуск асинхронной программы
